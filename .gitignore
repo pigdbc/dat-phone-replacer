@@ -1,0 +1,19 @@
+# 忽略数据文件
+in/*.dat
+out/*.dat
+log/*.log
+mapping/*.csv
+!mapping/mapping_example.csv
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# 编辑器
+*.swp
+*.swo
+.vscode/
+.idea/
