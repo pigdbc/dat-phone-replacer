@@ -1,7 +1,10 @@
-# 忽略数据文件
+# 忽略数据文件（保留sample示例）
 in/*.dat
+!in/sample.dat
 out/*.dat
+!out/sample.dat
 log/*.log
+!log/*sample*.log
 mapping/*.csv
 !mapping/mapping_example.csv
 
