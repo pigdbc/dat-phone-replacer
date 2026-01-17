@@ -16,23 +16,68 @@ $LogFolder     = "log"
 $MappingFolder = "mapping"
 
 # ==================== レコード設定 ====================
-$RecordSize   = 1300
-$HeaderMarker = 0x31      # ASCII '1'
-$DataMarker   = 0x32      # ASCII '2'
+# ==================== 設定ファイル読込 ====================
+$ConfigFile = "config.ini"
+if (-not (Test-Path $ConfigFile)) { $ConfigFile = "config_日本語.ini" }
+if ($args.Count -gt 2) { $ConfigFile = $args[2] }
 
-# ==================== 電話番号フィールド設定 ====================
-$PhoneFields = @(
-    @{
-        Name       = "Phone-1"
-        StartByte  = 100
-        Length     = 10
-    },
-    @{
-        Name       = "Phone-2"
-        StartByte  = 200
-        Length     = 10
+function Parse-IniFile {
+    param([string]$FilePath)
+    $ini = @{}
+    $section = "Global"
+    if (-not (Test-Path $FilePath)) { return $ini }
+    
+    Get-Content $FilePath -Encoding UTF8 | ForEach-Object {
+        $line = $_.Trim()
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith(";") -or $line.StartsWith("#")) { return }
+        if ($line -match "^\[(.*)\]$") {
+            $section = $matches[1]
+            $ini[$section] = @{}
+        } elseif ($line -match "^(.*?)=(.*)$") {
+            $key = $matches[1].Trim()
+            $value = $matches[2].Trim()
+            if (-not $ini.ContainsKey($section)) { $ini[$section] = @{} }
+            $ini[$section][$key] = $value
+        }
     }
-)
+    return $ini
+}
+
+$ConfigData = Parse-IniFile -FilePath $ConfigFile
+
+# ==================== レコード設定 ====================
+# デフォルト値
+$RecordSize   = 1300
+$HeaderMarker = 0x31
+$DataMarker   = 0x32
+
+# INIから設定を読込
+if ($ConfigData.ContainsKey("Settings")) {
+    if ($ConfigData["Settings"]["RecordSize"]) { $RecordSize = [int]$ConfigData["Settings"]["RecordSize"] }
+    if ($ConfigData["Settings"]["HeaderMarker"]) { $HeaderMarker = [int]$ConfigData["Settings"]["HeaderMarker"] + 0x30 }
+    if ($ConfigData["Settings"]["DataMarker"]) { $DataMarker = [int]$ConfigData["Settings"]["DataMarker"] + 0x30 }
+    if ($ConfigData["Settings"]["MappingFile"]) { $MappingFile = $ConfigData["Settings"]["MappingFile"] }
+}
+
+# ==================== 電話番号フィールド設定 (INIから読込) ====================
+$PhoneFields = @()
+foreach ($key in $ConfigData.Keys) {
+    if ($key -like "Phone-*") {
+        $PhoneFields += @{
+            Name       = $ConfigData[$key]["Name"]
+            StartByte  = [int]$ConfigData[$key]["StartByte"]
+            CharLength = [int]$ConfigData[$key]["Length"]
+        }
+    }
+}
+
+if ($PhoneFields.Count -eq 0) {
+    # デフォルト値
+    $PhoneFields = @(
+        @{ Name = "Phone-1"; StartByte = 100; CharLength = 10 },
+        @{ Name = "Phone-2"; StartByte = 200; CharLength = 10 }
+    )
+}
 
 # ==================== スクリプトロジック ====================
 
