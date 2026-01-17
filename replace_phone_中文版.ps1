@@ -1,7 +1,7 @@
 # ============================================
-# DAT文件电话号码替换脚本 (中文版 - FileStream)
+# DAT文件电话号码替换脚本 (中文版 - BigEndianUnicode)
 # 功能：根据CSV映射表替换DAT文件中的电话号码
-# ============================================
+# 编码：UTF-16BE (BigEndianUnicode)
 
 param(
     [string]$FileName = "data.dat",
@@ -25,12 +25,12 @@ $PhoneFields = @(
     @{
         Name       = "Phone-1"
         StartByte  = 100          # 起始位置（1-indexed）
-        Length     = 10           # 电话号码长度
+        CharLength = 10           # 电话号码字符数 (字节数 = CharLength * 2)
     },
     @{
         Name       = "Phone-2"
         StartByte  = 200
-        Length     = 10
+        CharLength = 10
     }
     # 添加更多字段...
 )
@@ -132,24 +132,27 @@ try {
             foreach ($field in $PhoneFields) {
                 $fieldOffset = $field.StartByte - 1
                 
-                # 读取当前电话号码
-                $currentPhone = [System.Text.Encoding]::ASCII.GetString($recordBuffer, $fieldOffset, $field.Length)
+                # 读取当前电话号码 (BigEndianUnicode: 每字符2字节)
+                $byteLen = $field.CharLength * 2
+                $phoneBytes = New-Object byte[] $byteLen
+                [Array]::Copy($recordBuffer, $fieldOffset, $phoneBytes, 0, $byteLen)
+                $currentPhone = [System.Text.Encoding]::BigEndianUnicode.GetString($phoneBytes)
                 
                 # 检查是否在映射表中
                 if ($phoneMapping.ContainsKey($currentPhone)) {
                     $newPhone = $phoneMapping[$currentPhone]
                     
                     # 验证新电话号码长度
-                    if ($newPhone.Length -eq $field.Length) {
-                        # 写入新电话号码
-                        $newPhoneBytes = [System.Text.Encoding]::ASCII.GetBytes($newPhone)
-                        [Array]::Copy($newPhoneBytes, 0, $recordBuffer, $fieldOffset, $field.Length)
+                    if ($newPhone.Length -eq $field.CharLength) {
+                        # 写入新电话号码 (BigEndianUnicode)
+                        $newPhoneBytes = [System.Text.Encoding]::BigEndianUnicode.GetBytes($newPhone)
+                        [Array]::Copy($newPhoneBytes, 0, $recordBuffer, $fieldOffset, $byteLen)
                         
                         $changes += "  $($field.Name): [$currentPhone] → [$newPhone]"
                         $hasChange = $true
                         $replacedPhoneCount++
                     } else {
-                        $changes += "  $($field.Name): 长度不匹配 (期望$($field.Length), 实际$($newPhone.Length))"
+                        $changes += "  $($field.Name): 长度不匹配 (期望$($field.CharLength), 实际$($newPhone.Length))"
                     }
                 } else {
                     $changes += "  $($field.Name): [$currentPhone] 无匹配"
