@@ -1,142 +1,150 @@
 #!/usr/bin/env python3
 """
-DAT文件电话号码替换脚本 (Python - FileStream版)
-功能：根据CSV映射表替换DAT文件中的电话号码
+DAT文件电话号码替换脚本 (Python版 - INI配置)
+Reads configuration from config.ini
 """
 import os
 import sys
 import csv
+import configparser
 from datetime import datetime
 
-# ==================== 基本配置 ====================
-FILE_NAME = sys.argv[1] if len(sys.argv) > 1 else "data.dat"
-MAPPING_FILE = sys.argv[2] if len(sys.argv) > 2 else "mapping.csv"
+def load_config(config_file='config.ini'):
+    """Load configuration from INI file"""
+    config = configparser.ConfigParser()
+    config.read(config_file, encoding='utf-8')
+    
+    settings = {
+        'RecordSize': config.getint('Settings', 'RecordSize', fallback=1300),
+        'HeaderMarker': config.getint('Settings', 'HeaderMarker', fallback=1),
+        'DataMarker': config.getint('Settings', 'DataMarker', fallback=2),
+        'MappingFile': config.get('Settings', 'MappingFile', fallback='mapping/mapping.csv'),
+    }
+    
+    fields = []
+    for section in config.sections():
+        if section.startswith('Phone-'):
+            field = {
+                'name': config.get(section, 'Name', fallback=section),
+                'start_byte': config.getint(section, 'StartByte'),
+                'length': config.getint(section, 'Length'),
+            }
+            fields.append(field)
+    
+    return settings, fields
 
-IN_FOLDER = "in"
-OUT_FOLDER = "out"
-LOG_FOLDER = "log"
-MAPPING_FOLDER = "mapping"
-
-RECORD_SIZE = 1300
-HEADER_MARKER = ord('1')
-DATA_MARKER = ord('2')
-
-# ==================== 电话号码字段配置 ====================
-PHONE_FIELDS = [
-    {"name": "Phone-1", "start_byte": 100, "length": 10},
-    {"name": "Phone-2", "start_byte": 200, "length": 10},
-    # 添加更多字段...
-]
-
-# ==================== 脚本逻辑 ====================
-
-timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-input_file = os.path.join(IN_FOLDER, FILE_NAME)
-output_file = os.path.join(OUT_FOLDER, FILE_NAME)
-mapping_path = os.path.join(MAPPING_FOLDER, MAPPING_FILE)
-log_file = os.path.join(LOG_FOLDER, f"{FILE_NAME.replace('.dat','')}{timestamp}.log")
-
-for folder in [OUT_FOLDER, LOG_FOLDER]:
-    os.makedirs(folder, exist_ok=True)
-
-if not os.path.exists(input_file):
-    print(f"错误: DAT文件 '{input_file}' 不存在！")
-    sys.exit(1)
-if not os.path.exists(mapping_path):
-    print(f"错误: 映射文件 '{mapping_path}' 不存在！")
-    sys.exit(1)
-
-# ==================== 加载CSV映射表 ====================
-
-phone_mapping = {}
-with open(mapping_path, 'r', encoding='utf-8') as f:
-    reader = csv.reader(f)
-    for row in reader:
-        if len(row) >= 2 and row[0].strip() and row[1].strip():
-            phone_mapping[row[0].strip()] = row[1].strip()
-
-log_lines = []
-def log(msg):
-    log_lines.append(msg)
-    print(msg)
-
-log("╔══════════════════════════════════════════════════════════════╗")
-log("║  DAT Phone Replacer (Python - FileStream)                    ║")
-log("╠══════════════════════════════════════════════════════════════╣")
-log(f"║  时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S'):50}║")
-log(f"║  输入:  {input_file:50}║")
-log(f"║  输出: {output_file:50}║")
-log(f"║  映射: {mapping_path:50}║")
-log("╚══════════════════════════════════════════════════════════════╝")
-log("")
-log(f"已加载 {len(phone_mapping)} 条电话号码映射规则")
-log("")
-
-file_size = os.path.getsize(input_file)
-record_count = file_size // RECORD_SIZE
-
-log(f"文件大小: {file_size} 字节")
-log(f"记录总数: {record_count} | 字段数量: {len(PHONE_FIELDS)}")
-log("─" * 64)
-log("")
-
-modified_count = 0
-replaced_phone_count = 0
-
-with open(input_file, "rb") as fin, open(output_file, "wb") as fout:
-    for i in range(record_count):
-        record = bytearray(fin.read(RECORD_SIZE))
-        
-        if len(record) != RECORD_SIZE:
-            log(f"[#{i+1:4}] 错误 - 读取字节不足: {len(record)} / {RECORD_SIZE}")
-            fout.write(record)
-            continue
-        
-        record_num = i + 1
-        first_byte = record[0]
-        
-        if first_byte == HEADER_MARKER:
-            log(f"[#{record_num:4}] HEADER - 已跳过")
-        elif first_byte == DATA_MARKER:
-            changes = []
-            has_change = False
+def main():
+    filename = sys.argv[1] if len(sys.argv) > 1 else 'data.dat'
+    config_file = sys.argv[2] if len(sys.argv) > 2 else 'config.ini'
+    
+    if not os.path.exists(config_file):
+        print(f"Error: Config file {config_file} not found!")
+        return 1
+    
+    settings, fields = load_config(config_file)
+    
+    RECORD_SIZE = settings['RecordSize']
+    HEADER_MARKER = 0x30 + settings['HeaderMarker']
+    DATA_MARKER = 0x30 + settings['DataMarker']
+    
+    input_file = f'in/{filename}'
+    output_file = f'out/{filename}'
+    mapping_path = settings['MappingFile']
+    
+    os.makedirs('out', exist_ok=True)
+    os.makedirs('log', exist_ok=True)
+    
+    if not os.path.exists(input_file):
+        print(f"Error: {input_file} not found!")
+        return 1
+    if not os.path.exists(mapping_path):
+        print(f"Error: {mapping_path} not found!")
+        return 1
+    
+    # Load mapping
+    phone_mapping = {}
+    with open(mapping_path, 'r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if len(row) >= 2 and row[0].strip() and row[1].strip():
+                phone_mapping[row[0].strip()] = row[1].strip()
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    log_file = f'log/{filename.replace(".dat", "")}_{timestamp}.log'
+    
+    logs = []
+    def log(msg):
+        logs.append(msg)
+        print(msg)
+    
+    log("╔══════════════════════════════════════════════════════════════╗")
+    log("║  DAT Phone Replacer (BigEndianUnicode) - INI Config          ║")
+    log("╚══════════════════════════════════════════════════════════════╝")
+    log(f"Config:  {config_file}")
+    log(f"Input:   {input_file}")
+    log(f"Output:  {output_file}")
+    log(f"Mapping: {mapping_path} ({len(phone_mapping)} rules)")
+    log("")
+    
+    file_size = os.path.getsize(input_file)
+    record_count = file_size // RECORD_SIZE
+    log(f"File size: {file_size} bytes, Records: {record_count}, Fields: {len(fields)}")
+    log("")
+    log("─" * 64)
+    
+    modified_count = 0
+    replaced_count = 0
+    
+    with open(input_file, 'rb') as f_in, open(output_file, 'wb') as f_out:
+        for i in range(record_count):
+            record = bytearray(f_in.read(RECORD_SIZE))
+            record_num = i + 1
+            first_byte = record[0]
             
-            for field in PHONE_FIELDS:
-                field_offset = field["start_byte"] - 1
-                current_phone = record[field_offset:field_offset + field["length"]].decode("ascii")
+            if first_byte == HEADER_MARKER:
+                log(f"[#{record_num:4d}] HEADER - Skip")
+            elif first_byte == DATA_MARKER:
+                changes = []
+                has_change = False
                 
-                if current_phone in phone_mapping:
-                    new_phone = phone_mapping[current_phone]
+                for field in fields:
+                    offset = field['start_byte'] - 1
+                    byte_len = field['length'] * 2  # BigEndianUnicode
                     
-                    if len(new_phone) == field["length"]:
-                        record[field_offset:field_offset + field["length"]] = new_phone.encode("ascii")
-                        changes.append(f"  {field['name']}: [{current_phone}] → [{new_phone}]")
-                        has_change = True
-                        replaced_phone_count += 1
+                    phone_bytes = bytes(record[offset:offset+byte_len])
+                    current_phone = phone_bytes.decode('utf-16-be', errors='replace')
+                    
+                    if current_phone in phone_mapping:
+                        new_phone = phone_mapping[current_phone]
+                        if len(new_phone) == field['length']:
+                            new_bytes = new_phone.encode('utf-16-be')
+                            record[offset:offset+byte_len] = new_bytes
+                            changes.append(f"  {field['name']}: [{current_phone}] → [{new_phone}]")
+                            has_change = True
+                            replaced_count += 1
+                        else:
+                            changes.append(f"  {field['name']}: Length mismatch")
                     else:
-                        changes.append(f"  {field['name']}: 长度不匹配 (期望{field['length']}, 实际{len(new_phone)})")
-                else:
-                    changes.append(f"  {field['name']}: [{current_phone}] 无匹配")
+                        changes.append(f"  {field['name']}: [{current_phone}] No match")
+                
+                if has_change:
+                    log(f"[#{record_num:4d}] REPLACED")
+                    for c in changes:
+                        log(c)
+                    modified_count += 1
             
-            if has_change:
-                log(f"[#{record_num:4}] REPLACED")
-                modified_count += 1
-            else:
-                log(f"[#{record_num:4}] NO MATCH")
-            for c in changes:
-                log(c)
-        
-        fout.write(record)
+            f_out.write(record)
+    
+    log("")
+    log("─" * 64)
+    log(f"Summary: {modified_count}/{record_count} records, {replaced_count} phones replaced")
+    
+    with open(log_file, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(logs))
+    
+    print(f"\n✓ Output: {output_file}")
+    print(f"✓ Log: {log_file}")
+    return 0
 
-log("")
-log("─" * 64)
-log("处理摘要:")
-log(f"  修改记录数: {modified_count} / {record_count}")
-log(f"  替换号码数: {replaced_phone_count}")
-log("─" * 64)
-
-with open(log_file, "w", encoding="utf-8") as f:
-    f.write("\n".join(log_lines))
-
-print(f"\n✓ 输出文件: {output_file}")
-print(f"✓ 日志文件: {log_file}")
+if __name__ == '__main__':
+    sys.exit(main())
