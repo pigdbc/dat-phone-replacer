@@ -1,5 +1,5 @@
 # ============================================
-# DAT文件电话号码替换脚本 (中文版 - 详细注释版)
+# DAT文件电话号码替换脚本 (中文版 - 详细注释版 - BigEndianUnicode)
 # 功能说明：
 #   1. 从mapping文件夹读取CSV映射表（旧电话→新电话）
 #   2. 从in文件夹读取DAT文件
@@ -186,10 +186,10 @@ try {
                 # 计算字段在记录中的偏移量（StartByte是1-indexed）
                 $fieldOffset = $field.StartByte - 1
                 
-                # 从缓冲区读取当前电话号码
-                $currentPhone = [System.Text.Encoding]::ASCII.GetString(
-                    $recordBuffer, $fieldOffset, $field.Length
-                )
+                # 从缓冲区读取当前电话号码（BigEndianUnicode每个字符占2字节）
+                $phoneBytes = New-Object byte[] ($field.Length * 2)
+                [Array]::Copy($recordBuffer, $fieldOffset, $phoneBytes, 0, $field.Length * 2)
+                $currentPhone = [System.Text.Encoding]::BigEndianUnicode.GetString($phoneBytes)
                 
                 # 检查当前电话号码是否在映射表中
                 if ($phoneMapping.ContainsKey($currentPhone)) {
@@ -198,11 +198,11 @@ try {
                     
                     # 验证新电话号码长度是否匹配
                     if ($newPhone.Length -eq $field.Length) {
-                        # 将新电话号码转换为字节数组
-                        $newPhoneBytes = [System.Text.Encoding]::ASCII.GetBytes($newPhone)
+                        # 将新电话号码转换为字节数组（BigEndianUnicode）
+                        $newPhoneBytes = [System.Text.Encoding]::BigEndianUnicode.GetBytes($newPhone)
                         
-                        # 将新电话号码写入记录缓冲区
-                        [Array]::Copy($newPhoneBytes, 0, $recordBuffer, $fieldOffset, $field.Length)
+                        # 将新电话号码写入记录缓冲区（每个字符2字节）
+                        [Array]::Copy($newPhoneBytes, 0, $recordBuffer, $fieldOffset, $field.Length * 2)
                         
                         $changes += "  $($field.Name): [$currentPhone] → [$newPhone]"
                         $hasChange = $true

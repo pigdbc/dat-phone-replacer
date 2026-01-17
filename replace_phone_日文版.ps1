@@ -1,6 +1,7 @@
 # ============================================
-# DATファイル電話番号置換スクリプト (日本語版 - FileStream)
+# DATファイル電話番号置換スクリプト (日本語版 - BigEndianUnicode)
 # 機能：CSVマッピングテーブルに基づいてDATファイル内の電話番号を置換
+# 対応：UTF-16BE (BigEndianUnicode) エンコード
 # ============================================
 
 param(
@@ -122,14 +123,16 @@ try {
             
             foreach ($field in $PhoneFields) {
                 $fieldOffset = $field.StartByte - 1
-                $currentPhone = [System.Text.Encoding]::ASCII.GetString($recordBuffer, $fieldOffset, $field.Length)
+                $phoneBytes = New-Object byte[] ($field.Length * 2)
+                [Array]::Copy($recordBuffer, $fieldOffset, $phoneBytes, 0, $field.Length * 2)
+                $currentPhone = [System.Text.Encoding]::BigEndianUnicode.GetString($phoneBytes)
                 
                 if ($phoneMapping.ContainsKey($currentPhone)) {
                     $newPhone = $phoneMapping[$currentPhone]
                     
                     if ($newPhone.Length -eq $field.Length) {
-                        $newPhoneBytes = [System.Text.Encoding]::ASCII.GetBytes($newPhone)
-                        [Array]::Copy($newPhoneBytes, 0, $recordBuffer, $fieldOffset, $field.Length)
+                        $newPhoneBytes = [System.Text.Encoding]::BigEndianUnicode.GetBytes($newPhone)
+                        [Array]::Copy($newPhoneBytes, 0, $recordBuffer, $fieldOffset, $field.Length * 2)
                         
                         $changes += "  $($field.Name): [$currentPhone] → [$newPhone]"
                         $hasChange = $true
