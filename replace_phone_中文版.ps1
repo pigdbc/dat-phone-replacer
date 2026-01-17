@@ -15,25 +15,67 @@ $LogFolder     = "log"
 $MappingFolder = "mapping"
 
 # ==================== 记录配置 ====================
-$RecordSize   = 1300
-$HeaderMarker = 0x31      # ASCII '1'
-$DataMarker   = 0x32      # ASCII '2'
+# ==================== 配置文件加载 ====================
+$ConfigFile = "config.ini"
+if (-not (Test-Path $ConfigFile)) { $ConfigFile = "config_日本語.ini" }
 
-# ==================== 电话号码字段配置 ====================
-# 定义DAT文件中电话号码的位置（可以有多个）
-$PhoneFields = @(
-    @{
-        Name       = "Phone-1"
-        StartByte  = 100          # 起始位置（1-indexed）
-        CharLength = 10           # 电话号码字符数 (字节数 = CharLength * 2)
-    },
-    @{
-        Name       = "Phone-2"
-        StartByte  = 200
-        CharLength = 10
+function Parse-IniFile {
+    param([string]$FilePath)
+    $ini = @{}
+    $section = "Global"
+    if (-not (Test-Path $FilePath)) { return $ini }
+    
+    Get-Content $FilePath -Encoding UTF8 | ForEach-Object {
+        $line = $_.Trim()
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith(";") -or $line.StartsWith("#")) { return }
+        if ($line -match "^\[(.*)\]$") {
+            $section = $matches[1]
+            $ini[$section] = @{}
+        } elseif ($line -match "^(.*?)=(.*)$") {
+            $key = $matches[1].Trim()
+            $value = $matches[2].Trim()
+            if (-not $ini.ContainsKey($section)) { $ini[$section] = @{} }
+            $ini[$section][$key] = $value
+        }
     }
-    # 添加更多字段...
-)
+    return $ini
+}
+
+$ConfigData = Parse-IniFile -FilePath $ConfigFile
+
+# ==================== 记录配置 ====================
+# 默认值
+$RecordSize   = 1300
+$HeaderMarker = 0x31
+$DataMarker   = 0x32
+
+# 从INI加载设置
+if ($ConfigData.ContainsKey("Settings")) {
+    if ($ConfigData["Settings"]["RecordSize"]) { $RecordSize = [int]$ConfigData["Settings"]["RecordSize"] }
+    if ($ConfigData["Settings"]["HeaderMarker"]) { $HeaderMarker = [int]$ConfigData["Settings"]["HeaderMarker"] + 0x30 }
+    if ($ConfigData["Settings"]["DataMarker"]) { $DataMarker = [int]$ConfigData["Settings"]["DataMarker"] + 0x30 }
+    if ($ConfigData["Settings"]["MappingFile"]) { $MappingFile = $ConfigData["Settings"]["MappingFile"] }
+}
+
+# ==================== 电话号码字段配置 (从INI加载) ====================
+$PhoneFields = @()
+foreach ($key in $ConfigData.Keys) {
+    if ($key -like "Phone-*") {
+        $PhoneFields += @{
+            Name       = $ConfigData[$key]["Name"]
+            StartByte  = [int]$ConfigData[$key]["StartByte"]
+            CharLength = [int]$ConfigData[$key]["Length"]
+        }
+    }
+}
+
+if ($PhoneFields.Count -eq 0) {
+    # 默认值
+    $PhoneFields = @(
+        @{ Name = "Phone-1"; StartByte = 100; CharLength = 10 },
+        @{ Name = "Phone-2"; StartByte = 200; CharLength = 10 }
+    )
+}
 
 # ==================== 脚本逻辑 ====================
 
