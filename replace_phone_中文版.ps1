@@ -17,7 +17,6 @@ $MappingFolder = "mapping"
 # ==================== 记录配置 ====================
 # ==================== 配置文件加载 ====================
 $ConfigFile = "config.ini"
-if (-not (Test-Path $ConfigFile)) { $ConfigFile = "config_日本語.ini" }
 
 function Parse-IniFile {
     param([string]$FilePath)
