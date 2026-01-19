@@ -19,14 +19,15 @@ param(
 
 # ==================== 文件夹配置 ====================
 # 这些变量定义了各类文件的存放位置
-$InFolder      = "in"       # 输入文件夹：存放原始DAT文件
-$OutFolder     = "out"      # 输出文件夹：存放修改后的DAT文件
-$LogFolder     = "log"      # 日志文件夹：存放处理日志
-$MappingFolder = "mapping"  # 映射文件夹：存放CSV映射表
+$BaseDir = $PSScriptRoot   # 脚本所在目录作为基础目录
+$InFolder = Join-Path $BaseDir "in"       # 输入文件夹：存放原始DAT文件
+$OutFolder = Join-Path $BaseDir "out"      # 输出文件夹：存放修改后的DAT文件
+$LogFolder = Join-Path $BaseDir "log"      # 日志文件夹：存放处理日志
+$MappingFolder = Join-Path $BaseDir "mapping"  # 映射文件夹：存放CSV映射表
 
 # ==================== 配置文件加载 ====================
 # 使用config.ini作为配置文件
-$ConfigFile = "config.ini"
+$ConfigFile = Join-Path $BaseDir "config.ini"
 
 # INI文件解析函数
 # 将INI格式的配置文件解析为嵌套的哈希表结构
@@ -46,8 +47,9 @@ function Parse-IniFile {
         if ($line -match "^\[(.*)\\]$") {
             $section = $matches[1]
             $ini[$section] = @{}
-        # 匹配键值对，如 RecordSize = 1300
-        } elseif ($line -match "^(.*?)=(.*)$") {
+            # 匹配键值对，如 RecordSize = 1300
+        }
+        elseif ($line -match "^(.*?)=(.*)$") {
             $key = $matches[1].Trim()
             $value = $matches[2].Trim()
             if (-not $ini.ContainsKey($section)) { $ini[$section] = @{} }
@@ -64,9 +66,9 @@ $ConfigData = Parse-IniFile -FilePath $ConfigFile
 # 这些常量定义了DAT文件的结构特征
 # 先设置默认值，然后从INI文件覆盖
 
-$RecordSize   = 1300       # 每条记录的固定字节数（默认值）
+$RecordSize = 1300       # 每条记录的固定字节数（默认值）
 $HeaderMarker = 0x31       # Header记录的首字节标识符（ASCII字符'1'）
-$DataMarker   = 0x32       # 数据记录的首字节标识符（ASCII字符'2'）
+$DataMarker = 0x32       # 数据记录的首字节标识符（ASCII字符'2'）
 
 # 从INI文件加载设置（如果存在）
 if ($ConfigData.ContainsKey("Settings")) {
@@ -82,7 +84,11 @@ if ($ConfigData.ContainsKey("Settings")) {
     if ($ConfigData["Settings"]["DataMarker"]) { 
         $DataMarker = [int]$ConfigData["Settings"]["DataMarker"] + 0x30 
     }
-    # 映射文件路径
+    # 映射文件夹
+    if ($ConfigData["Settings"]["MappingFolder"]) {
+        $MappingFolder = Join-Path $BaseDir $ConfigData["Settings"]["MappingFolder"]
+    }
+    # 映射文件名
     if ($ConfigData["Settings"]["MappingFile"]) { 
         $MappingFile = $ConfigData["Settings"]["MappingFile"] 
     }
@@ -116,14 +122,15 @@ if ($PhoneFields.Count -eq 0) {
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 
 # 构建完整的文件路径
-$InputFile   = Join-Path $InFolder $FileName                                    # 输入DAT文件路径
-$OutputFile  = Join-Path $OutFolder $FileName                                   # 输出DAT文件路径
+$InputFile = Join-Path $InFolder $FileName                                    # 输入DAT文件路径
+$OutputFile = Join-Path $OutFolder $FileName                                   # 输出DAT文件路径
 $MappingPath = Join-Path $MappingFolder $MappingFile                            # CSV映射文件路径
-$LogFile     = Join-Path $LogFolder "$($FileName -replace '\.dat$','')_$timestamp.log"  # 日志文件路径
+$LogFile = Join-Path $LogFolder "$($FileName -replace '\.dat$','')_$timestamp.log"  # 日志文件路径
 
 # 创建必要的文件夹（输出和日志文件夹）
 foreach ($folder in @($OutFolder, $LogFolder)) {
-    if (-not (Test-Path $folder)) {                           # 检查文件夹是否存在
+    if (-not (Test-Path $folder)) {
+        # 检查文件夹是否存在
         New-Item -ItemType Directory -Path $folder -Force | Out-Null  # 不存在则创建
     }
 }
@@ -149,7 +156,7 @@ $phoneMapping = @{}
 # CSV格式示例：
 #   1381234567,1391234567
 #   1382345678,1392345678
-$csvData = Import-Csv -Path $MappingPath -Header "OldPhone","NewPhone"
+$csvData = Import-Csv -Path $MappingPath -Header "OldPhone", "NewPhone"
 
 # 遍历每一行，将旧号码→新号码的映射存入哈希表
 foreach ($row in $csvData) {
@@ -270,11 +277,13 @@ try {
                         $changes += "  $($field.Name): [$currentPhone] → [$newPhone]"
                         $hasChange = $true
                         $replacedPhoneCount++  # 增加替换计数
-                    } else {
+                    }
+                    else {
                         # 长度不匹配，记录警告
                         $changes += "  $($field.Name): 长度不匹配 (期望$($field.CharLength), 实际$($newPhone.Length))"
                     }
-                } else {
+                }
+                else {
                     # 未找到匹配
                     $changes += "  $($field.Name): [$currentPhone] 无匹配"
                 }
@@ -284,7 +293,8 @@ try {
             if ($hasChange) {
                 Log "[#$($recordNum.ToString().PadLeft(4))] REPLACED"
                 $modifiedCount++
-            } else {
+            }
+            else {
                 Log "[#$($recordNum.ToString().PadLeft(4))] NO MATCH"
             }
             

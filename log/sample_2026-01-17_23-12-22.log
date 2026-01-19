@@ -1,0 +1,15 @@
+╔══════════════════════════════════════════════════════════════╗
+║  DAT Phone Replacer (BigEndianUnicode) - INI Config          ║
+╚══════════════════════════════════════════════════════════════╝
+Config:  config.ini
+Input:   in/sample.dat
+Output:  out/sample.dat
+Mapping: mapping/mapping.csv (5 rules)
+
+File size: 5200 bytes, Records: 4, Fields: 7
+
+────────────────────────────────────────────────────────────────
+[#   1] HEADER - Skip
+
+────────────────────────────────────────────────────────────────
+Summary: 0/4 records, 0 phones replaced

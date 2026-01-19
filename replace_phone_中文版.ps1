@@ -9,14 +9,15 @@ param(
 )
 
 # ==================== 文件夹配置 ====================
-$InFolder      = "in"
-$OutFolder     = "out"
-$LogFolder     = "log"
-$MappingFolder = "mapping"
+$BaseDir = $PSScriptRoot
+$InFolder = Join-Path $BaseDir "in"
+$OutFolder = Join-Path $BaseDir "out"
+$LogFolder = Join-Path $BaseDir "log"
+$MappingFolder = Join-Path $BaseDir "mapping"
 
 # ==================== 记录配置 ====================
 # ==================== 配置文件加载 ====================
-$ConfigFile = "config.ini"
+$ConfigFile = Join-Path $BaseDir "config.ini"
 
 function Parse-IniFile {
     param([string]$FilePath)
@@ -30,7 +31,8 @@ function Parse-IniFile {
         if ($line -match "^\[(.*)\]$") {
             $section = $matches[1]
             $ini[$section] = @{}
-        } elseif ($line -match "^(.*?)=(.*)$") {
+        }
+        elseif ($line -match "^(.*?)=(.*)$") {
             $key = $matches[1].Trim()
             $value = $matches[2].Trim()
             if (-not $ini.ContainsKey($section)) { $ini[$section] = @{} }
@@ -44,15 +46,16 @@ $ConfigData = Parse-IniFile -FilePath $ConfigFile
 
 # ==================== 记录配置 ====================
 # 默认值
-$RecordSize   = 1300
+$RecordSize = 1300
 $HeaderMarker = 0x31
-$DataMarker   = 0x32
+$DataMarker = 0x32
 
 # 从INI加载设置
 if ($ConfigData.ContainsKey("Settings")) {
     if ($ConfigData["Settings"]["RecordSize"]) { $RecordSize = [int]$ConfigData["Settings"]["RecordSize"] }
     if ($ConfigData["Settings"]["HeaderMarker"]) { $HeaderMarker = [int]$ConfigData["Settings"]["HeaderMarker"] + 0x30 }
     if ($ConfigData["Settings"]["DataMarker"]) { $DataMarker = [int]$ConfigData["Settings"]["DataMarker"] + 0x30 }
+    if ($ConfigData["Settings"]["MappingFolder"]) { $MappingFolder = Join-Path $BaseDir $ConfigData["Settings"]["MappingFolder"] }
     if ($ConfigData["Settings"]["MappingFile"]) { $MappingFile = $ConfigData["Settings"]["MappingFile"] }
 }
 
@@ -79,10 +82,10 @@ if ($PhoneFields.Count -eq 0) {
 # ==================== 脚本逻辑 ====================
 
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$InputFile   = Join-Path $InFolder $FileName
-$OutputFile  = Join-Path $OutFolder $FileName
+$InputFile = Join-Path $InFolder $FileName
+$OutputFile = Join-Path $OutFolder $FileName
 $MappingPath = Join-Path $MappingFolder $MappingFile
-$LogFile     = Join-Path $LogFolder "$($FileName -replace '\.dat$','')_$timestamp.log"
+$LogFile = Join-Path $LogFolder "$($FileName -replace '\.dat$','')_$timestamp.log"
 
 # 创建必要的文件夹
 foreach ($folder in @($OutFolder, $LogFolder)) {
@@ -106,7 +109,7 @@ if (-not (Test-Path $MappingPath)) {
 # 读取CSV文件并构建哈希表（字典）用于快速查找
 # CSV格式：OldPhone,NewPhone
 $phoneMapping = @{}
-$csvData = Import-Csv -Path $MappingPath -Header "OldPhone","NewPhone"
+$csvData = Import-Csv -Path $MappingPath -Header "OldPhone", "NewPhone"
 
 foreach ($row in $csvData) {
     if ($row.OldPhone -and $row.NewPhone) {
@@ -192,10 +195,12 @@ try {
                         $changes += "  $($field.Name): [$currentPhone] → [$newPhone]"
                         $hasChange = $true
                         $replacedPhoneCount++
-                    } else {
+                    }
+                    else {
                         $changes += "  $($field.Name): 长度不匹配 (期望$($field.CharLength), 实际$($newPhone.Length))"
                     }
-                } else {
+                }
+                else {
                     $changes += "  $($field.Name): [$currentPhone] 无匹配"
                 }
             }
@@ -203,7 +208,8 @@ try {
             if ($hasChange) {
                 Log "[#$($recordNum.ToString().PadLeft(4))] REPLACED"
                 $modifiedCount++
-            } else {
+            }
+            else {
                 Log "[#$($recordNum.ToString().PadLeft(4))] NO MATCH"
             }
             foreach ($c in $changes) { Log $c }

@@ -34,8 +34,11 @@ def load_config(config_file='config.ini'):
     return settings, fields
 
 def main():
+    # 使用脚本所在目录作为基础目录
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    
     filename = sys.argv[1] if len(sys.argv) > 1 else 'data.dat'
-    config_file = sys.argv[2] if len(sys.argv) > 2 else 'config.ini'
+    config_file = os.path.join(BASE_DIR, sys.argv[2] if len(sys.argv) > 2 else 'config.ini')
     
     if not os.path.exists(config_file):
         print(f"Error: Config file {config_file} not found!")
@@ -47,12 +50,12 @@ def main():
     HEADER_MARKER = 0x30 + settings['HeaderMarker']
     DATA_MARKER = 0x30 + settings['DataMarker']
     
-    input_file = f'in/{filename}'
-    output_file = f'out/{filename}'
-    mapping_path = settings['MappingFile']
+    input_file = os.path.join(BASE_DIR, 'in', filename)
+    output_file = os.path.join(BASE_DIR, 'out', filename)
+    mapping_path = os.path.join(BASE_DIR, settings['MappingFile'])
     
-    os.makedirs('out', exist_ok=True)
-    os.makedirs('log', exist_ok=True)
+    os.makedirs(os.path.join(BASE_DIR, 'out'), exist_ok=True)
+    os.makedirs(os.path.join(BASE_DIR, 'log'), exist_ok=True)
     
     if not os.path.exists(input_file):
         print(f"Error: {input_file} not found!")
@@ -70,7 +73,7 @@ def main():
                 phone_mapping[row[0].strip()] = row[1].strip()
     
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    log_file = f'log/{filename.replace(".dat", "")}_{timestamp}.log'
+    log_file = os.path.join(BASE_DIR, 'log', f'{filename.replace(".dat", "")}_{timestamp}.log')
     
     logs = []
     def log(msg):

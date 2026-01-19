@@ -10,82 +10,38 @@ param(
 )
 
 # ==================== フォルダ設定 ====================
-$InFolder      = "in"
-$OutFolder     = "out"
-$LogFolder     = "log"
-$MappingFolder = "mapping"
+$BaseDir = $PSScriptRoot
+$InFolder = Join-Path $BaseDir "in"
+$OutFolder = Join-Path $BaseDir "out"
+$LogFolder = Join-Path $BaseDir "log"
+$MappingFolder = Join-Path $BaseDir "mapping"
 
 # ==================== レコード設定 ====================
-# ==================== 設定ファイル読込 ====================
-$ConfigFile = "config.ini"
-if (-not (Test-Path $ConfigFile)) { $ConfigFile = "config_日本語.ini" }
-if ($args.Count -gt 2) { $ConfigFile = $args[2] }
+$RecordSize = 1300
+$HeaderMarker = 0x31      # ASCII '1'
+$DataMarker = 0x32      # ASCII '2'
 
-function Parse-IniFile {
-    param([string]$FilePath)
-    $ini = @{}
-    $section = "Global"
-    if (-not (Test-Path $FilePath)) { return $ini }
-    
-    Get-Content $FilePath -Encoding UTF8 | ForEach-Object {
-        $line = $_.Trim()
-        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith(";") -or $line.StartsWith("#")) { return }
-        if ($line -match "^\[(.*)\]$") {
-            $section = $matches[1]
-            $ini[$section] = @{}
-        } elseif ($line -match "^(.*?)=(.*)$") {
-            $key = $matches[1].Trim()
-            $value = $matches[2].Trim()
-            if (-not $ini.ContainsKey($section)) { $ini[$section] = @{} }
-            $ini[$section][$key] = $value
-        }
+# ==================== 電話番号フィールド設定 ====================
+$PhoneFields = @(
+    @{
+        Name      = "Phone-1"
+        StartByte = 100
+        Length    = 10
+    },
+    @{
+        Name      = "Phone-2"
+        StartByte = 200
+        Length    = 10
     }
-    return $ini
-}
-
-$ConfigData = Parse-IniFile -FilePath $ConfigFile
-
-# ==================== レコード設定 ====================
-# デフォルト値
-$RecordSize   = 1300
-$HeaderMarker = 0x31
-$DataMarker   = 0x32
-
-# INIから設定を読込
-if ($ConfigData.ContainsKey("Settings")) {
-    if ($ConfigData["Settings"]["RecordSize"]) { $RecordSize = [int]$ConfigData["Settings"]["RecordSize"] }
-    if ($ConfigData["Settings"]["HeaderMarker"]) { $HeaderMarker = [int]$ConfigData["Settings"]["HeaderMarker"] + 0x30 }
-    if ($ConfigData["Settings"]["DataMarker"]) { $DataMarker = [int]$ConfigData["Settings"]["DataMarker"] + 0x30 }
-    if ($ConfigData["Settings"]["MappingFile"]) { $MappingFile = $ConfigData["Settings"]["MappingFile"] }
-}
-
-# ==================== 電話番号フィールド設定 (INIから読込) ====================
-$PhoneFields = @()
-foreach ($key in $ConfigData.Keys) {
-    if ($key -like "Phone-*") {
-        $PhoneFields += @{
-            Name       = $ConfigData[$key]["Name"]
-            StartByte  = [int]$ConfigData[$key]["StartByte"]
-            CharLength = [int]$ConfigData[$key]["Length"]
-        }
-    }
-}
-
-if ($PhoneFields.Count -eq 0) {
-    # デフォルト値
-    $PhoneFields = @(
-        @{ Name = "Phone-1"; StartByte = 100; CharLength = 10 },
-        @{ Name = "Phone-2"; StartByte = 200; CharLength = 10 }
-    )
-}
+)
 
 # ==================== スクリプトロジック ====================
 
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$InputFile   = Join-Path $InFolder $FileName
-$OutputFile  = Join-Path $OutFolder $FileName
+$InputFile = Join-Path $InFolder $FileName
+$OutputFile = Join-Path $OutFolder $FileName
 $MappingPath = Join-Path $MappingFolder $MappingFile
-$LogFile     = Join-Path $LogFolder "$($FileName -replace '\.dat$','')_$timestamp.log"
+$LogFile = Join-Path $LogFolder "$($FileName -replace '\.dat$','')_$timestamp.log"
 
 foreach ($folder in @($OutFolder, $LogFolder)) {
     if (-not (Test-Path $folder)) { 
@@ -105,7 +61,7 @@ if (-not (Test-Path $MappingPath)) {
 # ==================== CSVマッピングテーブルを読み込む ====================
 
 $phoneMapping = @{}
-$csvData = Import-Csv -Path $MappingPath -Header "OldPhone","NewPhone"
+$csvData = Import-Csv -Path $MappingPath -Header "OldPhone", "NewPhone"
 
 foreach ($row in $csvData) {
     if ($row.OldPhone -and $row.NewPhone) {
@@ -182,10 +138,12 @@ try {
                         $changes += "  $($field.Name): [$currentPhone] → [$newPhone]"
                         $hasChange = $true
                         $replacedPhoneCount++
-                    } else {
+                    }
+                    else {
                         $changes += "  $($field.Name): 長さ不一致 (期待$($field.Length), 実際$($newPhone.Length))"
                     }
-                } else {
+                }
+                else {
                     $changes += "  $($field.Name): [$currentPhone] マッチなし"
                 }
             }
@@ -193,7 +151,8 @@ try {
             if ($hasChange) {
                 Log "[#$($recordNum.ToString().PadLeft(4))] 置換済み"
                 $modifiedCount++
-            } else {
+            }
+            else {
                 Log "[#$($recordNum.ToString().PadLeft(4))] マッチなし"
             }
             foreach ($c in $changes) { Log $c }
