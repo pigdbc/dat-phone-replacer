@@ -15,11 +15,8 @@ dat-phone-replacer/
 ├── log/                               ← 日志文件夹 (自动生成)
 ├── mapping/                           ← 映射文件夹 (放置CSV映射表)
 │   └── mapping.csv
-├── config.ini                         ← 配置文件 (中文)
-├── config_日本語.ini                  ← 配置文件 (日本語)
-├── replace_phone.py                   ← Python脚本 (推荐)
-├── replace_phone_中文版.ps1           ← PowerShell脚本
-├── replace_phone_日文版.ps1           ← PowerShell脚本
+├── config.ini                         ← 配置文件
+├── replace_phone.ps1                 ← PowerShell脚本
 └── README.md
 ```
 
@@ -27,20 +24,10 @@ dat-phone-replacer/
 
 ## 🚀 快速开始 / Quick Start
 
-### Python (推荐/跨平台)
-
-```bash
-# 使用默认配置文件 config.ini
-python3 replace_phone.py data.dat
-
-# 使用日语配置文件
-python3 replace_phone.py data.dat config_日本語.ini
-```
-
 ### PowerShell (Windows)
 
 ```powershell
-.\replace_phone_中文版.ps1 -FileName "data.dat"
+.\replace_phone.ps1 -FileName "data.dat"
 ```
 
 ---
@@ -51,14 +38,14 @@ python3 replace_phone.py data.dat config_日本語.ini
 
 ```ini
 [Settings]
-RecordSize = 1300           # 每条记录的字节数
+RecordSize = 1300           # 每条记录的字符数
 HeaderMarker = 1            # 头部记录标识符
 DataMarker = 2              # 数据记录标识符
 MappingFile = mapping/mapping.csv
 
 [Phone-1]
 Name = Phone-1
-StartByte = 100             # 起始位置 (1-indexed)
+StartByte = 100             # 起始字符位置 (1-indexed)
 Length = 10                 # 电话号码长度(字符数)
 
 [Phone-2]
@@ -78,7 +65,7 @@ CSV文件放在 `mapping/` 文件夹中：
 1391234567,1891234567
 ```
 
-**注意：** 新旧电话号码长度必须与字段配置一致
+**注意：** 新旧电话号码长度必须与字段配置一致（UTF-16BE 每字符 2 字节）
 
 ---
 
