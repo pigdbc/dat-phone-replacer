@@ -95,7 +95,6 @@ Summary: 3/4 records, 5 phones replaced
 - ✅ **BigEndianUnicode** - 支持 UTF-16BE 编码
 - ✅ **哈希表查找** - O(1) 时间复杂度
 - ✅ **流式读写** - 支持处理超大文件
-- ✅ **多语言支持** - 中文、日本語配置文件
 
 ---
 
